@@ -172,15 +172,24 @@ class SchemaGenerator(object):
         """
 
         incoming_type = element_schema.type
-        curr_type = (
-            self.schema_columns_dict[elem_name].type
+        curr_schema = (
+            self.schema_columns_dict[elem_name]
             if elem_name in self.schema_columns_dict
             else None
         )
+
+        # Check there is no funny business with the modes
+        if curr_schema is not None:
+            if curr_schema.mode != element_schema.mode:
+                raise Exception(
+                    f"Mode mismatch for column: {elem_name}, \
+                    found when parsing schema of records... terminating..."
+                )
+
         if incoming_type in self.type_hierarchy:
-            if curr_type is None:
+            if curr_schema is None:
                 self.schema_columns_dict[elem_name] = element_schema
-            elif incoming_type in self.type_hierarchy[curr_type]:
+            elif incoming_type in self.type_hierarchy[curr_schema.type]:
                 self.schema_columns_dict[elem_name] = element_schema
             else:
                 pass  # do nth
@@ -264,6 +273,14 @@ class SchemaGenerator(object):
         required to construct a Big Query schema"""
         for record in batch:
             self._get_record_schema(record)
+
+    def merge(self, other: "SchemaGenerator") -> "SchemaGenerator":
+        """Merges two SchemaGenerator objects together by updating self.schema_columns_dict with the other's
+        schema_columns_dict"""
+        for key, value in other.schema_columns_dict.items():
+            self._update_schema_columns_dict(key, value)
+
+        return self
 
     def get_bq_schema(self) -> list[dict[str, Any]]:
         self._construct_bq_schema(self.schema_columns_dict)
